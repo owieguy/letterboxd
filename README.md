@@ -82,6 +82,18 @@ also be triggered manually from the Actions tab.
 **DST caveat:** GitHub Actions cron is always UTC and doesn't shift for
 daylight saving — see the comment in the workflow file.
 
+### Refreshing on demand
+
+Every generated page has a "🔄 Refresh data" button. Since a static Pages
+site has no backend, it doesn't refresh in place — it deep-links to the
+workflow's GitHub Actions page, where you (as the signed-in repo owner)
+click "Run workflow" to trigger an on-demand rebuild, then reload the page
+after ~1–2 minutes. (A true one-click refresh would need a write-capable
+GitHub token embedded in this page's public client-side source, which isn't
+safe on a public repo.) The button's target is configurable via the
+`REFRESH_WORKFLOW_URL` env var — set it to an empty string to hide the
+button entirely (e.g. on a fork with no such workflow).
+
 ## Hosting on GitLab Pages (auto-updating weekly)
 
 `.gitlab-ci.yml` defines a `pages` job that installs dependencies, runs
