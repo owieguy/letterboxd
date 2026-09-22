@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ list_title }} — Free to watch</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* chart chrome & ink — validated palette (see dataviz skill palette.md) */
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series-1: #2a78d6;      /* nominal single-series mark (the bar chart) */
+    --status-good: #0ca30c;   /* fixed status scale — never themed */
+    --status-good-ink: #0b0b0b; /* dark text on the green fill clears 4.5:1; white does not */
+    --badge-off-bg: #f0f0f0;
+    --badge-off-text: #b4b3ac;
+    --chip-bg: #eceef4;
+    --chip-active-bg: #2a78d6;
+    --chip-active-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8b8a84;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --series-1: #3987e5;
+      --status-good: #0ca30c;
+      --status-good-ink: #0b0b0b;
+      --badge-off-bg: #2b2c33;
+      --badge-off-text: #5c5c64;
+      --chip-bg: #2b2c33;
+      --chip-active-bg: #3987e5;
+      --chip-active-text: #0b0b0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header, .summary, .controls, main, footer {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  header { padding: 2rem 1.5rem 0; }
+  h1 { margin: 0 0 0.3rem; font-size: 1.6rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-secondary); font-size: 0.95rem; margin: 0; }
+  .subtitle a { color: var(--series-1); }
+
+  /* ---- summary: hero stat + stat tiles + bar chart ---- */
+  .summary {
+    padding: 1.5rem 1.5rem 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.6fr);
+    gap: 1.25rem;
+    align-items: stretch;
+  }
+  @media (max-width: 760px) {
+    .summary { grid-template-columns: 1fr; }
+  }
+  .stat-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.9rem;
+  }
+  .hero-figure { font-size: 3rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .hero-label { color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.35rem; }
+  .stat-tiles { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .stat-tile .stat-value { font-size: 1.15rem; font-weight: 600; }
+  .stat-tile .stat-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .chart-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.4rem 1rem;
+  }
+  .chart-title { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.15rem; }
+  .chart-subtitle { color: var(--text-muted); font-size: 0.72rem; margin: 0 0 0.9rem; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 84px 1fr 28px;
+    align-items: center;
+    gap: 0.6rem;
+    height: 26px;
+    position: relative;
+  }
+  .bar-row .bar-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bar-track {
+    position: relative;
+    height: 16px;
+    background-image: linear-gradient(to right, var(--gridline) 1px, transparent 1px);
+    background-size: 25% 100%;
+    border-left: 1px solid var(--baseline);
+  }
+  .bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--series-1);
+    border-radius: 0 4px 4px 0;
+    min-width: 3px;
+    transition: filter 0.1s ease;
+  }
+  .bar-row:hover .bar-fill { filter: brightness(1.12); }
+  .bar-value { font-size: 0.78rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .bar-row[data-count="0"] .bar-value { color: var(--text-muted); }
+  .bar-tooltip {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 4px);
+    background: var(--text-primary);
+    color: var(--page);
+    font-size: 0.72rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(2px);
+    transition: opacity 0.1s ease, transform 0.1s ease;
+    z-index: 2;
+  }
+  .bar-row:hover .bar-tooltip { opacity: 1; transform: translateY(0); }
+  .table-toggle {
+    margin-top: 0.9rem;
+    background: none;
+    border: none;
+    color: var(--series-1);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0;
+  }
+  .chart-table { display: none; margin-top: 0.75rem; border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+  .chart-table.shown { display: table; }
+  .chart-table th, .chart-table td { text-align: left; padding: 0.3rem 0.5rem 0.3rem 0; border-bottom: 1px solid var(--gridline); }
+  .chart-table th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.03em; }
+  .chart-table td.num, .chart-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- controls ---- */
+  .controls {
+    padding: 1.25rem 1.5rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  #search, #sort {
+    padding: 0.5rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+  }
+  #search { flex: 1 1 220px; }
+  .chip {
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: var(--chip-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .chip.active {
+    background: var(--chip-active-bg);
+    color: var(--chip-active-text);
+    border-color: transparent;
+  }
+  .chip.free-only { font-weight: 600; }
+
+  main { padding: 0.5rem 1.5rem 3rem; }
+  .count-line { color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1.1rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card.hidden { display: none; }
+  .poster-wrap {
+    aspect-ratio: 2 / 3;
+    background: var(--chip-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .poster-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .poster-wrap .no-poster { color: var(--text-muted); font-size: 0.75rem; padding: 0.5rem; text-align: center; }
+  .card-body { padding: 0.6rem 0.7rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; flex: 1; }
+  .film-title { font-size: 0.9rem; font-weight: 600; line-height: 1.25; }
+  .film-title a { color: inherit; text-decoration: none; }
+  .film-title a:hover { text-decoration: underline; }
+  .film-year { color: var(--text-muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: auto; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.22rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+    background: var(--badge-off-bg);
+    color: var(--badge-off-text);
+  }
+  .badge.on {
+    background: var(--status-good);
+    color: var(--status-good-ink);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  a.badge.on:hover, a.badge.on:focus-visible { text-decoration: underline; filter: brightness(1.08); }
+  .badge .tick { font-size: 0.65rem; }
+  .no-results { color: var(--text-muted); padding: 2rem 0; text-align: center; }
+  footer {
+    padding: 1rem 1.5rem 3rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--series-1); }
+  .back-link {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem 0;
+    font-size: 0.82rem;
+  }
+  .back-link a { color: var(--text-muted); text-decoration: none; }
+  .back-link a:hover { color: var(--series-1); text-decoration: underline; }
+</style>
+</head>
+<body>
+{% if back_to_index %}
+<div class="back-link"><a href="{{ back_to_index }}">← All lists</a></div>
+{% endif %}
+<header>
+  <h1>{{ list_title }} — what's free right now</h1>
+  <p class="subtitle">
+    Checking {{ total_films }} films from
+    <a href="{{ list_url }}" target="_blank" rel="noopener">this Letterboxd list</a>
+    against {{ service_labels|length }} streaming services in {{ country }}.
+    Generated {{ generated_at }}.
+  </p>
+</header>
+
+<section class="summary">
+  <div class="stat-panel">
+    <div>
+      <div class="hero-figure">{{ free_count }}<span style="font-size:1.6rem;color:var(--text-muted);">/{{ total_films }}</span></div>
+      <div class="hero-label">films are free somewhere in {{ country }} right now</div>
+    </div>
+    <div class="stat-tiles">
+      <div class="stat-tile">
+        <div class="stat-value">{{ service_labels|length }}</div>
+        <div class="stat-label">Services checked</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-value">{{ total_films - free_count }}</div>
+        <div class="stat-label">Not free anywhere</div>
+      </div>
+      {% if unresolved_count %}
+      <div class="stat-tile">
+        <div class="stat-value">{{ unresolved_count }}</div>
+        <div class="stat-label">Unmatched</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="chart-panel">
+    <p class="chart-title">Free films by service</p>
+    <p class="chart-subtitle">Out of {{ total_films }} films on the list · subscription, free, or ad-supported only · "Free (ads)" = Pluto TV, Tubi, etc.</p>
+    {% for row in service_counts %}
+    <div class="bar-row" data-count="{{ row.count }}">
+      <div class="bar-label">{{ row.label }}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: {{ row.pct_of_max }}%;"></div>
+        <div class="bar-tooltip">
+          {{ row.count }} of {{ total_films }} films ({{ row.pct_of_total }}%)
+          {%- if row.breakdown %} — {% for b in row.breakdown %}{{ b.name }}: {{ b.count }}{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+        </div>
+      </div>
+      <div class="bar-value">{{ row.count }}</div>
+    </div>
+    {% endfor %}
+    <button class="table-toggle" id="table-toggle" aria-expanded="false">View as table ▾</button>
+    <table class="chart-table" id="chart-table">
+      <thead><tr><th>Service</th><th class="num">Films</th><th class="num">% of list</th></tr></thead>
+      <tbody>
+        {% for row in service_counts %}
+        <tr>
+          <td>
+            {{ row.label }}
+            {%- if row.breakdown %}<br><span style="color:var(--text-muted); font-size:0.7rem;">{% for b in row.breakdown %}{{ b.name }} ({{ b.count }}){% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+          </td>
+          <td class="num">{{ row.count }}</td>
+          <td class="num">{{ row.pct_of_total }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="controls">
+  <input id="search" type="text" placeholder="Search title…">
+  <select id="sort">
+    <option value="title">Sort: Title (A–Z)</option>
+    <option value="year-desc">Sort: Year (newest)</option>
+    <option value="year-asc">Sort: Year (oldest)</option>
+    <option value="most-free">Sort: Most services free</option>
+  </select>
+  <button class="chip free-only" id="free-only-chip" data-active="0">Free anywhere ✓</button>
+  {% for key, label in service_labels %}
+  <button class="chip svc-chip" data-service="{{ key }}" data-active="0">{{ label }}</button>
+  {% endfor %}
+</div>
+
+<main>
+  <p class="count-line" id="count-line"></p>
+  <div class="grid" id="grid">
+    {% for film in films %}
+    <div class="card"
+         data-title="{{ film.title|lower }}"
+         data-year="{{ film.year or 0 }}"
+         data-free-count="{{ film.services.values()|selectattr('available')|list|length }}"
+         data-any-free="{{ 1 if film.any_free else 0 }}"
+         {% for key, _ in service_labels %}data-svc-{{ key }}="{{ 1 if film.services[key].available else 0 }}" {% endfor %}>
+      <div class="poster-wrap">
+        {% if film.poster_url %}
+        <img src="{{ film.poster_url }}" alt="{{ film.title }} poster" loading="lazy">
+        {% else %}
+        <div class="no-poster">No poster</div>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="{{ film.letterboxd_url }}" target="_blank" rel="noopener">{{ film.title }}</a>
+        </div>
+        <div class="film-year">{{ film.year or "" }}</div>
+        <div class="badges">
+          {% for key, label in service_labels %}
+          {% set svc = film.services[key] %}
+          {# The "free" bucket is an umbrella over several distinct platforms
+             (Tubi, Pluto TV, ...) -- name the actual one(s) rather than the
+             generic label, so "free" always means something concrete. #}
+          {% set display_text = svc.matched|join(' / ') if (key == 'free' and svc.available and svc.matched) else label %}
+          {% if svc.available %}
+          <a class="badge on" href="{{ svc.url }}" target="_blank" rel="noopener noreferrer"
+             title="Search for “{{ film.title }}” on {{ svc.matched|join(', ') }}">
+            <span class="tick">✓</span> {{ display_text }}
+          </a>
+          {% else %}
+          <span class="badge" title="Not available">{{ display_text }}</span>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="no-results" id="no-results" style="display:none;">No films match the current filters.</p>
+</main>
+
+<footer>
+  <p>
+    Streaming availability data provided by JustWatch, via
+    <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">The Movie Database (TMDB)</a>.
+    Film list from <a href="{{ list_url }}" target="_blank" rel="noopener">Letterboxd</a>.
+    Only subscription-included / free / ad-supported availability is shown — rent &amp; buy options are ignored.
+    Click a green badge to search for that film on that service (best-effort — TMDB doesn't expose a direct per-title link, so this opens the service's own search results).
+    {% if unresolved_count %}
+    <br>{{ unresolved_count }} film(s) couldn't be matched to a TMDB entry and are shown with no badges.
+    {% endif %}
+  </p>
+</footer>
+
+<script>
+(function () {
+  const grid = document.getElementById('grid');
+  const cards = Array.from(grid.querySelectorAll('.card'));
+  const search = document.getElementById('search');
+  const sortSelect = document.getElementById('sort');
+  const freeOnlyChip = document.getElementById('free-only-chip');
+  const svcChips = Array.from(document.querySelectorAll('.svc-chip'));
+  const countLine = document.getElementById('count-line');
+  const noResults = document.getElementById('no-results');
+  const tableToggle = document.getElementById('table-toggle');
+  const chartTable = document.getElementById('chart-table');
+
+  // data-svc-netflix -> dataset key "svcNetflix"
+  function svcDatasetKey(serviceKey) {
+    return 'svc' + serviceKey.charAt(0).toUpperCase() + serviceKey.slice(1);
+  }
+
+  function activeServiceKeys() {
+    return svcChips.filter(c => c.dataset.active === '1').map(c => c.dataset.service);
+  }
+
+  function applyFilters() {
+    const q = search.value.trim().toLowerCase();
+    const freeOnly = freeOnlyChip.dataset.active === '1';
+    const wanted = activeServiceKeys();
+    let shown = 0;
+
+    cards.forEach(card => {
+      const matchesSearch = !q || card.dataset.title.includes(q);
+      const matchesFree = !freeOnly || card.dataset.anyFree === '1';
+      const matchesServices = wanted.every(s => card.dataset[svcDatasetKey(s)] === '1');
+      const visible = matchesSearch && matchesFree && matchesServices;
+      card.classList.toggle('hidden', !visible);
+      if (visible) shown++;
+    });
+
+    countLine.textContent = shown + ' of ' + cards.length + ' films shown';
+    noResults.style.display = shown === 0 ? 'block' : 'none';
+  }
+
+  function applySort() {
+    const mode = sortSelect.value;
+    const sorted = cards.slice().sort((a, b) => {
+      if (mode === 'year-desc') return (b.dataset.year|0) - (a.dataset.year|0);
+      if (mode === 'year-asc') return (a.dataset.year|0) - (b.dataset.year|0);
+      if (mode === 'most-free') return (b.dataset.freeCount|0) - (a.dataset.freeCount|0);
+      return a.dataset.title.localeCompare(b.dataset.title);
+    });
+    sorted.forEach(card => grid.appendChild(card));
+  }
+
+  search.addEventListener('input', applyFilters);
+  sortSelect.addEventListener('change', applySort);
+  freeOnlyChip.addEventListener('click', () => {
+    freeOnlyChip.dataset.active = freeOnlyChip.dataset.active === '1' ? '0' : '1';
+    freeOnlyChip.classList.toggle('active');
+    applyFilters();
+  });
+  svcChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.dataset.active = chip.dataset.active === '1' ? '0' : '1';
+      chip.classList.toggle('active');
+      applyFilters();
+    });
+  });
+  tableToggle.addEventListener('click', () => {
+    const shown = chartTable.classList.toggle('shown');
+    tableToggle.setAttribute('aria-expanded', String(shown));
+    tableToggle.textContent = shown ? 'Hide table ▴' : 'View as table ▾';
+  });
+
+  applyFilters();
+})();
+</script>
+</body>
+</html>

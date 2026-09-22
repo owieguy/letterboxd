@@ -1,0 +1,8 @@
+.env
+cache/
+output/
+public/
+__pycache__/
+*.pyc
+.venv/
+.cache/

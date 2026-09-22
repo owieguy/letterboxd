@@ -1,0 +1,29 @@
+image: python:3.12-slim
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Persists the TMDB id + streaming-availability cache (and pip's download
+# cache) between pipeline runs, so weekly scheduled runs don't re-resolve
+# every film from scratch or re-hammer Letterboxd/TMDB unnecessarily.
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .cache/pip
+    - cache/
+
+pages:
+  script:
+    - pip install -r requirements.txt
+    - python main.py --output-dir public
+  artifacts:
+    paths:
+      - public
+  rules:
+    # Weekly refresh, triggered by the pipeline schedule set up in
+    # Settings -> CI/CD -> Schedules (see README).
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    # Rebuild + redeploy whenever code changes land on the default branch.
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    # Allow manually triggering a run from Settings -> CI/CD -> Pipelines -> "Run pipeline".
+    - if: '$CI_PIPELINE_SOURCE == "web"'
