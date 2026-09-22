@@ -1,0 +1,2362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch On My Own — Free to watch</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* chart chrome & ink — validated palette (see dataviz skill palette.md) */
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series-1: #2a78d6;      /* nominal single-series mark (the bar chart) */
+    --status-good: #0ca30c;   /* fixed status scale — never themed */
+    --status-good-ink: #0b0b0b; /* dark text on the green fill clears 4.5:1; white does not */
+    --badge-off-bg: #f0f0f0;
+    --badge-off-text: #b4b3ac;
+    --chip-bg: #eceef4;
+    --chip-active-bg: #2a78d6;
+    --chip-active-text: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8b8a84;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --series-1: #3987e5;
+      --status-good: #0ca30c;
+      --status-good-ink: #0b0b0b;
+      --badge-off-bg: #2b2c33;
+      --badge-off-text: #5c5c64;
+      --chip-bg: #2b2c33;
+      --chip-active-bg: #3987e5;
+      --chip-active-text: #0b0b0b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header, .summary, .controls, main, footer {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  header { padding: 2rem 1.5rem 0; }
+  h1 { margin: 0 0 0.3rem; font-size: 1.6rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--text-secondary); font-size: 0.95rem; margin: 0; }
+  .subtitle a { color: var(--series-1); }
+
+  /* ---- summary: hero stat + stat tiles + bar chart ---- */
+  .summary {
+    padding: 1.5rem 1.5rem 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(320px, 1.6fr);
+    gap: 1.25rem;
+    align-items: stretch;
+  }
+  @media (max-width: 760px) {
+    .summary { grid-template-columns: 1fr; }
+  }
+  .stat-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.9rem;
+  }
+  .hero-figure { font-size: 3rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+  .hero-label { color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.35rem; }
+  .stat-tiles { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .stat-tile .stat-value { font-size: 1.15rem; font-weight: 600; }
+  .stat-tile .stat-label { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .chart-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.4rem 1rem;
+  }
+  .chart-title { font-size: 0.85rem; font-weight: 600; margin: 0 0 0.15rem; }
+  .chart-subtitle { color: var(--text-muted); font-size: 0.72rem; margin: 0 0 0.9rem; }
+  .bar-row {
+    display: grid;
+    grid-template-columns: 84px 1fr 28px;
+    align-items: center;
+    gap: 0.6rem;
+    height: 26px;
+    position: relative;
+  }
+  .bar-row .bar-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bar-track {
+    position: relative;
+    height: 16px;
+    background-image: linear-gradient(to right, var(--gridline) 1px, transparent 1px);
+    background-size: 25% 100%;
+    border-left: 1px solid var(--baseline);
+  }
+  .bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--series-1);
+    border-radius: 0 4px 4px 0;
+    min-width: 3px;
+    transition: filter 0.1s ease;
+  }
+  .bar-row:hover .bar-fill { filter: brightness(1.12); }
+  .bar-value { font-size: 0.78rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .bar-row[data-count="0"] .bar-value { color: var(--text-muted); }
+  .bar-tooltip {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 4px);
+    background: var(--text-primary);
+    color: var(--page);
+    font-size: 0.72rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(2px);
+    transition: opacity 0.1s ease, transform 0.1s ease;
+    z-index: 2;
+  }
+  .bar-row:hover .bar-tooltip { opacity: 1; transform: translateY(0); }
+  .table-toggle {
+    margin-top: 0.9rem;
+    background: none;
+    border: none;
+    color: var(--series-1);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0;
+  }
+  .chart-table { display: none; margin-top: 0.75rem; border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+  .chart-table.shown { display: table; }
+  .chart-table th, .chart-table td { text-align: left; padding: 0.3rem 0.5rem 0.3rem 0; border-bottom: 1px solid var(--gridline); }
+  .chart-table th { color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.03em; }
+  .chart-table td.num, .chart-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- controls ---- */
+  .controls {
+    padding: 1.25rem 1.5rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  #search, #sort {
+    padding: 0.5rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+  }
+  #search { flex: 1 1 220px; }
+  .chip {
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: var(--chip-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .chip.active {
+    background: var(--chip-active-bg);
+    color: var(--chip-active-text);
+    border-color: transparent;
+  }
+  .chip.free-only { font-weight: 600; }
+
+  main { padding: 0.5rem 1.5rem 3rem; }
+  .count-line { color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1.1rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card.hidden { display: none; }
+  .poster-wrap {
+    aspect-ratio: 2 / 3;
+    background: var(--chip-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .poster-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .poster-wrap .no-poster { color: var(--text-muted); font-size: 0.75rem; padding: 0.5rem; text-align: center; }
+  .card-body { padding: 0.6rem 0.7rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; flex: 1; }
+  .film-title { font-size: 0.9rem; font-weight: 600; line-height: 1.25; }
+  .film-title a { color: inherit; text-decoration: none; }
+  .film-title a:hover { text-decoration: underline; }
+  .film-year { color: var(--text-muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: auto; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.22rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.2rem 0.45rem;
+    border-radius: 6px;
+    background: var(--badge-off-bg);
+    color: var(--badge-off-text);
+  }
+  .badge.on {
+    background: var(--status-good);
+    color: var(--status-good-ink);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  a.badge.on:hover, a.badge.on:focus-visible { text-decoration: underline; filter: brightness(1.08); }
+  .badge .tick { font-size: 0.65rem; }
+  .no-results { color: var(--text-muted); padding: 2rem 0; text-align: center; }
+  footer {
+    padding: 1rem 1.5rem 3rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--series-1); }
+  .back-link {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem 0;
+    font-size: 0.82rem;
+  }
+  .back-link a { color: var(--text-muted); text-decoration: none; }
+  .back-link a:hover { color: var(--series-1); text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="back-link"><a href="index.html">← All lists</a></div>
+
+<header>
+  <h1>Watch On My Own — what's free right now</h1>
+  <p class="subtitle">
+    Checking 20 films from
+    <a href="https://boxd.it/Skwgs" target="_blank" rel="noopener">this Letterboxd list</a>
+    against 9 streaming services in US.
+    Generated 2026-09-22 12:34 EDT.
+  </p>
+</header>
+
+<section class="summary">
+  <div class="stat-panel">
+    <div>
+      <div class="hero-figure">12<span style="font-size:1.6rem;color:var(--text-muted);">/20</span></div>
+      <div class="hero-label">films are free somewhere in US right now</div>
+    </div>
+    <div class="stat-tiles">
+      <div class="stat-tile">
+        <div class="stat-value">9</div>
+        <div class="stat-label">Services checked</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-value">8</div>
+        <div class="stat-label">Not free anywhere</div>
+      </div>
+      
+    </div>
+  </div>
+
+  <div class="chart-panel">
+    <p class="chart-title">Free films by service</p>
+    <p class="chart-subtitle">Out of 20 films on the list · subscription, free, or ad-supported only · "Free (ads)" = Pluto TV, Tubi, etc.</p>
+    
+    <div class="bar-row" data-count="4">
+      <div class="bar-label">HBO / Max</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 100%;"></div>
+        <div class="bar-tooltip">
+          4 of 20 films (20%) — HBO Max: 4 · HBO Max Amazon Channel: 4
+        </div>
+      </div>
+      <div class="bar-value">4</div>
+    </div>
+    
+    <div class="bar-row" data-count="4">
+      <div class="bar-label">Paramount+</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 100%;"></div>
+        <div class="bar-tooltip">
+          4 of 20 films (20%) — Paramount Plus Premium: 4 · Paramount+ Amazon Channel: 4 · Paramount Plus Essential: 3 · Paramount+ Roku Premium Channel: 2
+        </div>
+      </div>
+      <div class="bar-value">4</div>
+    </div>
+    
+    <div class="bar-row" data-count="2">
+      <div class="bar-label">Netflix</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 50%;"></div>
+        <div class="bar-tooltip">
+          2 of 20 films (10%) — Netflix: 2 · Netflix Standard with Ads: 2
+        </div>
+      </div>
+      <div class="bar-value">2</div>
+    </div>
+    
+    <div class="bar-row" data-count="2">
+      <div class="bar-label">Hulu</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 50%;"></div>
+        <div class="bar-tooltip">
+          2 of 20 films (10%)
+        </div>
+      </div>
+      <div class="bar-value">2</div>
+    </div>
+    
+    <div class="bar-row" data-count="2">
+      <div class="bar-label">Apple TV+</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 50%;"></div>
+        <div class="bar-tooltip">
+          2 of 20 films (10%) — AMC Plus Apple TV channel: 1 · Apple TV: 1 · Apple TV Amazon Channel: 1 · Starz Apple TV channel: 1
+        </div>
+      </div>
+      <div class="bar-value">2</div>
+    </div>
+    
+    <div class="bar-row" data-count="2">
+      <div class="bar-label">Free (ads)</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 50%;"></div>
+        <div class="bar-tooltip">
+          2 of 20 films (10%) — The Roku Channel: 1 · Plex Channel: 1 · Pluto TV: 1
+        </div>
+      </div>
+      <div class="bar-value">2</div>
+    </div>
+    
+    <div class="bar-row" data-count="0">
+      <div class="bar-label">Prime Video</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 0%;"></div>
+        <div class="bar-tooltip">
+          0 of 20 films (0%)
+        </div>
+      </div>
+      <div class="bar-value">0</div>
+    </div>
+    
+    <div class="bar-row" data-count="0">
+      <div class="bar-label">Disney+</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 0%;"></div>
+        <div class="bar-tooltip">
+          0 of 20 films (0%)
+        </div>
+      </div>
+      <div class="bar-value">0</div>
+    </div>
+    
+    <div class="bar-row" data-count="0">
+      <div class="bar-label">Peacock</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width: 0%;"></div>
+        <div class="bar-tooltip">
+          0 of 20 films (0%)
+        </div>
+      </div>
+      <div class="bar-value">0</div>
+    </div>
+    
+    <button class="table-toggle" id="table-toggle" aria-expanded="false">View as table ▾</button>
+    <table class="chart-table" id="chart-table">
+      <thead><tr><th>Service</th><th class="num">Films</th><th class="num">% of list</th></tr></thead>
+      <tbody>
+        
+        <tr>
+          <td>
+            HBO / Max<br><span style="color:var(--text-muted); font-size:0.7rem;">HBO Max (4), HBO Max Amazon Channel (4)</span>
+          </td>
+          <td class="num">4</td>
+          <td class="num">20%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Paramount+<br><span style="color:var(--text-muted); font-size:0.7rem;">Paramount Plus Premium (4), Paramount+ Amazon Channel (4), Paramount Plus Essential (3), Paramount+ Roku Premium Channel (2)</span>
+          </td>
+          <td class="num">4</td>
+          <td class="num">20%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Netflix<br><span style="color:var(--text-muted); font-size:0.7rem;">Netflix (2), Netflix Standard with Ads (2)</span>
+          </td>
+          <td class="num">2</td>
+          <td class="num">10%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Hulu
+          </td>
+          <td class="num">2</td>
+          <td class="num">10%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Apple TV+<br><span style="color:var(--text-muted); font-size:0.7rem;">AMC Plus Apple TV channel (1), Apple TV (1), Apple TV Amazon Channel (1), Starz Apple TV channel (1)</span>
+          </td>
+          <td class="num">2</td>
+          <td class="num">10%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Free (ads)<br><span style="color:var(--text-muted); font-size:0.7rem;">The Roku Channel (1), Plex Channel (1), Pluto TV (1)</span>
+          </td>
+          <td class="num">2</td>
+          <td class="num">10%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Prime Video
+          </td>
+          <td class="num">0</td>
+          <td class="num">0%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Disney+
+          </td>
+          <td class="num">0</td>
+          <td class="num">0%</td>
+        </tr>
+        
+        <tr>
+          <td>
+            Peacock
+          </td>
+          <td class="num">0</td>
+          <td class="num">0%</td>
+        </tr>
+        
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="controls">
+  <input id="search" type="text" placeholder="Search title…">
+  <select id="sort">
+    <option value="title">Sort: Title (A–Z)</option>
+    <option value="year-desc">Sort: Year (newest)</option>
+    <option value="year-asc">Sort: Year (oldest)</option>
+    <option value="most-free">Sort: Most services free</option>
+  </select>
+  <button class="chip free-only" id="free-only-chip" data-active="0">Free anywhere ✓</button>
+  
+  <button class="chip svc-chip" data-service="netflix" data-active="0">Netflix</button>
+  
+  <button class="chip svc-chip" data-service="prime" data-active="0">Prime Video</button>
+  
+  <button class="chip svc-chip" data-service="disney" data-active="0">Disney+</button>
+  
+  <button class="chip svc-chip" data-service="hulu" data-active="0">Hulu</button>
+  
+  <button class="chip svc-chip" data-service="peacock" data-active="0">Peacock</button>
+  
+  <button class="chip svc-chip" data-service="appletv" data-active="0">Apple TV+</button>
+  
+  <button class="chip svc-chip" data-service="hbo" data-active="0">HBO / Max</button>
+  
+  <button class="chip svc-chip" data-service="paramount" data-active="0">Paramount+</button>
+  
+  <button class="chip svc-chip" data-service="free" data-active="0">Free (ads)</button>
+  
+</div>
+
+<main>
+  <p class="count-line" id="count-line"></p>
+  <div class="grid" id="grid">
+    
+    <div class="card"
+         data-title="marty supreme"
+         data-year="2025"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="1" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/lYWEXbQgRTR4ZQleSXAgRbxAjvq.jpg" alt="Marty Supreme poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/marty-supreme/" target="_blank" rel="noopener">Marty Supreme</a>
+        </div>
+        <div class="film-year">2025</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.max.com/search?q=Marty+Supreme" target="_blank" rel="noopener noreferrer"
+             title="Search for “Marty Supreme” on HBO Max, HBO Max Amazon Channel">
+            <span class="tick">✓</span> HBO / Max
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the godfather part ii"
+         data-year="1974"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="1" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/sSuQTCZwqKrNBNIsksO9IAUoWP9.jpg" alt="The Godfather Part II poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-godfather-part-ii/" target="_blank" rel="noopener">The Godfather Part II</a>
+        </div>
+        <div class="film-year">1974</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.paramountplus.com/search?query=The+Godfather+Part+II" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Godfather Part II” on Paramount Plus Essential, Paramount Plus Premium, Paramount+ Amazon Channel, Paramount+ Roku Premium Channel">
+            <span class="tick">✓</span> Paramount+
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the godfather part iii"
+         data-year="1990"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/lm3pQ2QoQ16pextRsmnUbG2onES.jpg" alt="The Godfather Part III poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-godfather-part-iii/" target="_blank" rel="noopener">The Godfather Part III</a>
+        </div>
+        <div class="film-year">1990</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="midsommar"
+         data-year="2019"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="1" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/7LEI8ulZzO5gy9Ww2NVCrKmHeDZ.jpg" alt="Midsommar poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/midsommar/" target="_blank" rel="noopener">Midsommar</a>
+        </div>
+        <div class="film-year">2019</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.max.com/search?q=Midsommar" target="_blank" rel="noopener noreferrer"
+             title="Search for “Midsommar” on HBO Max, HBO Max Amazon Channel">
+            <span class="tick">✓</span> HBO / Max
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="2001: a space odyssey"
+         data-year="1968"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="1" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/ve72VxNqjGM69Uky4WTo2bK6rfq.jpg" alt="2001: A Space Odyssey poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/2001-a-space-odyssey/" target="_blank" rel="noopener">2001: A Space Odyssey</a>
+        </div>
+        <div class="film-year">1968</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.max.com/search?q=2001%3A+A+Space+Odyssey" target="_blank" rel="noopener noreferrer"
+             title="Search for “2001: A Space Odyssey” on HBO Max, HBO Max Amazon Channel">
+            <span class="tick">✓</span> HBO / Max
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="once upon a time... in hollywood"
+         data-year="2019"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/8j58iEBw9pOXFD2L0nt0ZXeHviB.jpg" alt="Once Upon a Time... in Hollywood poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/once-upon-a-time-in-hollywood/" target="_blank" rel="noopener">Once Upon a Time... in Hollywood</a>
+        </div>
+        <div class="film-year">2019</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="blackkklansman"
+         data-year="2018"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/8jxqAvSDoneSKRczaK8v9X5gqBp.jpg" alt="BlacKkKlansman poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/blackkklansman/" target="_blank" rel="noopener">BlacKkKlansman</a>
+        </div>
+        <div class="film-year">2018</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the lighthouse"
+         data-year="2019"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="1" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/yAKNmpcUweGH6WMCEWenwU9PsbE.jpg" alt="The Lighthouse poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-lighthouse-2019/" target="_blank" rel="noopener">The Lighthouse</a>
+        </div>
+        <div class="film-year">2019</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.max.com/search?q=The+Lighthouse" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Lighthouse” on HBO Max, HBO Max Amazon Channel">
+            <span class="tick">✓</span> HBO / Max
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="bullet train"
+         data-year="2022"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="1" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/j8szC8OgrejDQjjMKSVXyaAjw3V.jpg" alt="Bullet Train poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/bullet-train/" target="_blank" rel="noopener">Bullet Train</a>
+        </div>
+        <div class="film-year">2022</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.hulu.com/search?q=Bullet+Train" target="_blank" rel="noopener noreferrer"
+             title="Search for “Bullet Train” on Hulu">
+            <span class="tick">✓</span> Hulu
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the matrix"
+         data-year="1999"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg" alt="The Matrix poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-matrix/" target="_blank" rel="noopener">The Matrix</a>
+        </div>
+        <div class="film-year">1999</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="everything everywhere all at once"
+         data-year="2022"
+         data-free-count="2"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="1" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="1" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/u68AjlvlutfEIcpmbYpKcdi09ut.jpg" alt="Everything Everywhere All at Once poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/everything-everywhere-all-at-once/" target="_blank" rel="noopener">Everything Everywhere All at Once</a>
+        </div>
+        <div class="film-year">2022</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.hulu.com/search?q=Everything+Everywhere+All+at+Once" target="_blank" rel="noopener noreferrer"
+             title="Search for “Everything Everywhere All at Once” on Hulu">
+            <span class="tick">✓</span> Hulu
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://therokuchannel.roku.com/search?q=Everything+Everywhere+All+at+Once" target="_blank" rel="noopener noreferrer"
+             title="Search for “Everything Everywhere All at Once” on The Roku Channel">
+            <span class="tick">✓</span> The Roku Channel
+          </a>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="parasite"
+         data-year="2019"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg" alt="Parasite poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/parasite-2019/" target="_blank" rel="noopener">Parasite</a>
+        </div>
+        <div class="film-year">2019</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="no country for old men"
+         data-year="2007"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="1" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/6d5XOczc226jECq0LIX0siKtgHR.jpg" alt="No Country for Old Men poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/no-country-for-old-men/" target="_blank" rel="noopener">No Country for Old Men</a>
+        </div>
+        <div class="film-year">2007</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.paramountplus.com/search?query=No+Country+for+Old+Men" target="_blank" rel="noopener noreferrer"
+             title="Search for “No Country for Old Men” on Paramount Plus Essential, Paramount Plus Premium, Paramount+ Amazon Channel">
+            <span class="tick">✓</span> Paramount+
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the hunger games: the ballad of songbirds &amp; snakes"
+         data-year="2023"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="1" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/mBaXZ95R2OxueZhvQbcEWy2DqyO.jpg" alt="The Hunger Games: The Ballad of Songbirds &amp; Snakes poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-hunger-games-the-ballad-of-songbirds-snakes/" target="_blank" rel="noopener">The Hunger Games: The Ballad of Songbirds &amp; Snakes</a>
+        </div>
+        <div class="film-year">2023</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.netflix.com/search?q=The+Hunger+Games%3A+The+Ballad+of+Songbirds+%26+Snakes" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Hunger Games: The Ballad of Songbirds &amp; Snakes” on Netflix, Netflix Standard with Ads">
+            <span class="tick">✓</span> Netflix
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the death of stalin"
+         data-year="2017"
+         data-free-count="3"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="1" data-svc-hbo="0" data-svc-paramount="1" data-svc-free="1" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/AqH7q89NxGRDAyRWKqsL3OBtYfV.jpg" alt="The Death of Stalin poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-death-of-stalin/" target="_blank" rel="noopener">The Death of Stalin</a>
+        </div>
+        <div class="film-year">2017</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://tv.apple.com/search?term=The+Death+of+Stalin" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Death of Stalin” on AMC Plus Apple TV channel">
+            <span class="tick">✓</span> Apple TV+
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.paramountplus.com/search?query=The+Death+of+Stalin" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Death of Stalin” on Paramount Plus Premium, Paramount+ Amazon Channel">
+            <span class="tick">✓</span> Paramount+
+          </a>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://watch.plex.tv/search?query=The+Death+of+Stalin" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Death of Stalin” on Plex Channel, Pluto TV">
+            <span class="tick">✓</span> Plex Channel / Pluto TV
+          </a>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="steve jobs"
+         data-year="2015"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/ljiRO29Y9khEERRqMluptUYunJ9.jpg" alt="Steve Jobs poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/steve-jobs/" target="_blank" rel="noopener">Steve Jobs</a>
+        </div>
+        <div class="film-year">2015</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="gone girl"
+         data-year="2014"
+         data-free-count="1"
+         data-any-free="1"
+         data-svc-netflix="1" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/ts996lKsxvjkO2yiYG0ht4qAicO.jpg" alt="Gone Girl poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/gone-girl/" target="_blank" rel="noopener">Gone Girl</a>
+        </div>
+        <div class="film-year">2014</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.netflix.com/search?q=Gone+Girl" target="_blank" rel="noopener noreferrer"
+             title="Search for “Gone Girl” on Netflix, Netflix Standard with Ads">
+            <span class="tick">✓</span> Netflix
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the wolf of wall street"
+         data-year="2013"
+         data-free-count="2"
+         data-any-free="1"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="1" data-svc-hbo="0" data-svc-paramount="1" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/kW9LmvYHAaS9iA0tHmZVq8hQYoq.jpg" alt="The Wolf of Wall Street poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-wolf-of-wall-street/" target="_blank" rel="noopener">The Wolf of Wall Street</a>
+        </div>
+        <div class="film-year">2013</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://tv.apple.com/search?term=The+Wolf+of+Wall+Street" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Wolf of Wall Street” on Apple TV, Apple TV Amazon Channel, Starz Apple TV channel">
+            <span class="tick">✓</span> Apple TV+
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <a class="badge on" href="https://www.paramountplus.com/search?query=The+Wolf+of+Wall+Street" target="_blank" rel="noopener noreferrer"
+             title="Search for “The Wolf of Wall Street” on Paramount Plus Essential, Paramount Plus Premium, Paramount+ Amazon Channel, Paramount+ Roku Premium Channel">
+            <span class="tick">✓</span> Paramount+
+          </a>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="the nice guys"
+         data-year="2016"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/clq4So9spa9cXk3MZy2iMdqkxP2.jpg" alt="The Nice Guys poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/the-nice-guys/" target="_blank" rel="noopener">The Nice Guys</a>
+        </div>
+        <div class="film-year">2016</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+    <div class="card"
+         data-title="blade runner"
+         data-year="1982"
+         data-free-count="0"
+         data-any-free="0"
+         data-svc-netflix="0" data-svc-prime="0" data-svc-disney="0" data-svc-hulu="0" data-svc-peacock="0" data-svc-appletv="0" data-svc-hbo="0" data-svc-paramount="0" data-svc-free="0" >
+      <div class="poster-wrap">
+        
+        <img src="https://image.tmdb.org/t/p/w200/63N9uy8nd9j7Eog2axPQ8lbr3Wj.jpg" alt="Blade Runner poster" loading="lazy">
+        
+      </div>
+      <div class="card-body">
+        <div class="film-title">
+          <a href="https://letterboxd.com/film/blade-runner/" target="_blank" rel="noopener">Blade Runner</a>
+        </div>
+        <div class="film-year">1982</div>
+        <div class="badges">
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Netflix</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Prime Video</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Disney+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Hulu</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Peacock</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Apple TV+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">HBO / Max</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Paramount+</span>
+          
+          
+          
+          
+          
+          
+          <span class="badge" title="Not available">Free (ads)</span>
+          
+          
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <p class="no-results" id="no-results" style="display:none;">No films match the current filters.</p>
+</main>
+
+<footer>
+  <p>
+    Streaming availability data provided by JustWatch, via
+    <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">The Movie Database (TMDB)</a>.
+    Film list from <a href="https://boxd.it/Skwgs" target="_blank" rel="noopener">Letterboxd</a>.
+    Only subscription-included / free / ad-supported availability is shown — rent &amp; buy options are ignored.
+    Click a green badge to search for that film on that service (best-effort — TMDB doesn't expose a direct per-title link, so this opens the service's own search results).
+    
+  </p>
+</footer>
+
+<script>
+(function () {
+  const grid = document.getElementById('grid');
+  const cards = Array.from(grid.querySelectorAll('.card'));
+  const search = document.getElementById('search');
+  const sortSelect = document.getElementById('sort');
+  const freeOnlyChip = document.getElementById('free-only-chip');
+  const svcChips = Array.from(document.querySelectorAll('.svc-chip'));
+  const countLine = document.getElementById('count-line');
+  const noResults = document.getElementById('no-results');
+  const tableToggle = document.getElementById('table-toggle');
+  const chartTable = document.getElementById('chart-table');
+
+  // data-svc-netflix -> dataset key "svcNetflix"
+  function svcDatasetKey(serviceKey) {
+    return 'svc' + serviceKey.charAt(0).toUpperCase() + serviceKey.slice(1);
+  }
+
+  function activeServiceKeys() {
+    return svcChips.filter(c => c.dataset.active === '1').map(c => c.dataset.service);
+  }
+
+  function applyFilters() {
+    const q = search.value.trim().toLowerCase();
+    const freeOnly = freeOnlyChip.dataset.active === '1';
+    const wanted = activeServiceKeys();
+    let shown = 0;
+
+    cards.forEach(card => {
+      const matchesSearch = !q || card.dataset.title.includes(q);
+      const matchesFree = !freeOnly || card.dataset.anyFree === '1';
+      const matchesServices = wanted.every(s => card.dataset[svcDatasetKey(s)] === '1');
+      const visible = matchesSearch && matchesFree && matchesServices;
+      card.classList.toggle('hidden', !visible);
+      if (visible) shown++;
+    });
+
+    countLine.textContent = shown + ' of ' + cards.length + ' films shown';
+    noResults.style.display = shown === 0 ? 'block' : 'none';
+  }
+
+  function applySort() {
+    const mode = sortSelect.value;
+    const sorted = cards.slice().sort((a, b) => {
+      if (mode === 'year-desc') return (b.dataset.year|0) - (a.dataset.year|0);
+      if (mode === 'year-asc') return (a.dataset.year|0) - (b.dataset.year|0);
+      if (mode === 'most-free') return (b.dataset.freeCount|0) - (a.dataset.freeCount|0);
+      return a.dataset.title.localeCompare(b.dataset.title);
+    });
+    sorted.forEach(card => grid.appendChild(card));
+  }
+
+  search.addEventListener('input', applyFilters);
+  sortSelect.addEventListener('change', applySort);
+  freeOnlyChip.addEventListener('click', () => {
+    freeOnlyChip.dataset.active = freeOnlyChip.dataset.active === '1' ? '0' : '1';
+    freeOnlyChip.classList.toggle('active');
+    applyFilters();
+  });
+  svcChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.dataset.active = chip.dataset.active === '1' ? '0' : '1';
+      chip.classList.toggle('active');
+      applyFilters();
+    });
+  });
+  tableToggle.addEventListener('click', () => {
+    const shown = chartTable.classList.toggle('shown');
+    tableToggle.setAttribute('aria-expanded', String(shown));
+    tableToggle.textContent = shown ? 'Hide table ▴' : 'View as table ▾';
+  });
+
+  applyFilters();
+})();
+</script>
+</body>
+</html>

@@ -12,9 +12,12 @@ specifically per film, not just the umbrella)
 Re-run it any time to pick up new additions/removals from each list and
 refreshed streaming availability.
 
-Can be run locally (see below) or hosted for free on **GitLab Pages**, where
-a scheduled CI pipeline re-runs it and redeploys the site automatically —
-see [Hosting on GitLab Pages](#hosting-on-gitlab-pages-auto-updating-weekly).
+**Live at https://owieguy.github.io/letterboxd/** — a GitHub Actions
+workflow (`.github/workflows/update.yml`) re-runs the script and redeploys
+weekly, the same pattern used by [Fantasy Thing](#hosting-on-github-pages-auto-updating-weekly).
+A GitLab Pages setup also exists in `.gitlab-ci.yml` (see
+[Hosting on GitLab Pages](#hosting-on-gitlab-pages-auto-updating-weekly))
+if you'd rather move hosting there later — GitHub is what's live today.
 
 ## One-time setup
 
@@ -53,6 +56,31 @@ python main.py --list-url <url>          # process just this one list instead of
 python main.py --list-url <url> --output somewhere.html   # ...and write it to an exact path
 python main.py --country GB              # check a different region
 ```
+
+## Hosting on GitHub Pages (auto-updating weekly)
+
+This is how the live site above is actually hosted. `.github/workflows/update.yml`
+installs dependencies, runs `python main.py --output-dir docs`, and commits
+`docs/` back to `main` if anything changed — GitHub Pages serves whatever's
+in `docs/` on the default branch. It runs every Tuesday at 08:00 UTC and can
+also be triggered manually from the Actions tab.
+
+### One-time GitHub setup
+
+1. Push this repo to a **public** GitHub repo (public repos get free Pages).
+2. **Settings → Secrets and variables → Actions** → add a repository secret
+   `TMDB_API_KEY` with your TMDB key. `LIST_URLS` / `COUNTRY` don't need
+   secrets — the script's built-in defaults match this repo's
+   `.env.example` lists.
+3. **Settings → Pages** → Source: "Deploy from a branch" → Branch `main`,
+   folder `/docs` → Save.
+4. Trigger the workflow once manually (Actions tab → "Update letterboxd
+   streaming checker site" → "Run workflow") to populate `docs/` for the
+   first time, or just run `python main.py --output-dir docs` locally and
+   push `docs/` yourself.
+
+**DST caveat:** GitHub Actions cron is always UTC and doesn't shift for
+daylight saving — see the comment in the workflow file.
 
 ## Hosting on GitLab Pages (auto-updating weekly)
 
