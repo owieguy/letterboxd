@@ -69,12 +69,33 @@
     font-size: 0.78rem;
     border-top: 1px solid var(--border);
   }
+  .refresh-line { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--text-muted); }
+  .refresh-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .refresh-button:hover { border-color: var(--series-1); color: var(--series-1); }
 </style>
 </head>
 <body>
 <header>
   <h1>Free to watch</h1>
   <p class="subtitle">{{ lists|length }} list{{ 's' if lists|length != 1 else '' }} tracked · generated {{ generated_at }}</p>
+  {% if refresh_workflow_url %}
+  <p class="refresh-line">
+    <a class="refresh-button" href="{{ refresh_workflow_url }}" target="_blank" rel="noopener">🔄 Refresh all lists</a>
+    — opens GitHub Actions; click "Run workflow" to re-check every list now (takes ~1&ndash;2 min, then reload). Otherwise this updates automatically every week.
+  </p>
+  {% endif %}
 </header>
 
 <main>

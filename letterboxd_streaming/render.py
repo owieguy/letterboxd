@@ -24,6 +24,7 @@ def render_page(
     unresolved_count: int,
     output_path: Path,
     back_to_index: str | None = None,
+    refresh_workflow_url: str | None = None,
 ) -> None:
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     template = env.get_template("index.html.jinja")
@@ -80,13 +81,15 @@ def render_page(
         unresolved_count=unresolved_count,
         generated_at=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"),
         back_to_index=back_to_index,
+        refresh_workflow_url=refresh_workflow_url,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html)
 
 
-def render_landing(*, lists: dict[str, dict], country: str, output_path: Path) -> None:
+def render_landing(*, lists: dict[str, dict], country: str, output_path: Path,
+                    refresh_workflow_url: str | None = None) -> None:
     """Renders the hub page linking out to every list's own generated page."""
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     template = env.get_template("landing.html.jinja")
@@ -97,6 +100,7 @@ def render_landing(*, lists: dict[str, dict], country: str, output_path: Path) -
         lists=rows,
         country=country,
         generated_at=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"),
+        refresh_workflow_url=refresh_workflow_url,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -21,6 +21,14 @@ DEFAULT_LIST_URLS = [
     "https://boxd.it/8HjM",  # Letterboxd's Top 500 Films
 ]
 DEFAULT_COUNTRY = "US"
+# GitHub Actions' own "Run workflow" page for the update workflow -- linked
+# from a "Refresh data" button on generated pages so a viewer can trigger an
+# on-demand re-check without waiting for the weekly schedule. There's no
+# backend to wire up an in-page one-click refresh without exposing a
+# write-capable GitHub token in this public page's client-side source, which
+# isn't safe to do -- this deep-links to GitHub's own dispatch UI instead,
+# where the signed-in repo owner clicks "Run workflow" themselves.
+DEFAULT_REFRESH_WORKFLOW_URL = "https://github.com/owieguy/letterboxd/actions/workflows/update.yml"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "output"
 DEFAULT_CACHE_PATH = PROJECT_ROOT / "cache" / "data.json"
 DEFAULT_PROVIDER_MAX_AGE_HOURS = 24
@@ -39,6 +47,7 @@ class Config:
     cache_path: Path
     provider_max_age_hours: float
     force_refresh: bool
+    refresh_workflow_url: str | None
 
 
 def _parse_list_urls(raw: str) -> list[str]:
@@ -86,4 +95,12 @@ def load_config(
             else float(os.environ.get("PROVIDER_MAX_AGE_HOURS", DEFAULT_PROVIDER_MAX_AGE_HOURS))
         ),
         force_refresh=force_refresh,
+        # Empty string (REFRESH_WORKFLOW_URL=) explicitly opts out and hides
+        # the button -- e.g. for a fork pointed at a repo with no such
+        # workflow.
+        refresh_workflow_url=(
+            os.environ["REFRESH_WORKFLOW_URL"].strip() or None
+            if "REFRESH_WORKFLOW_URL" in os.environ
+            else DEFAULT_REFRESH_WORKFLOW_URL
+        ),
     )

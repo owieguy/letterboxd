@@ -190,6 +190,7 @@ def main() -> None:
             unresolved_count=summary["unresolved_count"],
             output_path=out_path,
             back_to_index="index.html" if multi_mode else None,
+            refresh_workflow_url=config.refresh_workflow_url,
         )
 
         if slug is not None:
@@ -215,7 +216,12 @@ def main() -> None:
 
     if multi_mode:
         index_path = config.output_dir / "index.html"
-        render.render_landing(lists=cache_mod.get_lists(cache), country=config.country, output_path=index_path)
+        render.render_landing(
+            lists=cache_mod.get_lists(cache),
+            country=config.country,
+            output_path=index_path,
+            refresh_workflow_url=config.refresh_workflow_url,
+        )
         print(f"Landing page written to: {index_path}")
 
 
